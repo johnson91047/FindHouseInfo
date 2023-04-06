@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	sheetName     = "Main"
+	sheetName     = ""
 	spreadsheetId = ""
 	crawlDelay    = 500 * time.Millisecond
 	headers       = []interface{}{
@@ -63,6 +63,7 @@ func init() {
 	}
 
 	spreadsheetId = os.Getenv("SPREADSHEET_ID")
+	sheetName = os.Getenv("SHEET_NAME")
 }
 
 func main() {
