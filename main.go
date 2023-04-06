@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +17,43 @@ import (
 )
 
 var (
+	sheetName     = "Main"
 	spreadsheetId = ""
 	crawlDelay    = 500 * time.Millisecond
+	headers       = []string{
+		"標題",
+		"連結",
+		"價格/坪",
+		"價格/戶",
+		"車位價格",
+		"格局",
+		"坪數",
+		"交屋時間",
+		"建設公司",
+		"地址",
+		"公設比",
+		"建蔽率",
+		"基地面積",
+		"管理費用",
+		"車位配比",
+		"車位規劃",
+		"棟戶規劃",
+		"樓層規劃",
+		"捷運系統",
+		"高速公路",
+		"快速道路",
+		"高鐵系統",
+		"台鐵系統",
+		"其他方式",
+		"學區",
+		"超商/賣場",
+		"傳統市場",
+		"公共建設",
+		"熱門商圈",
+		"醫療機構",
+		"政府機構",
+		"其他配套",
+	}
 )
 
 func init() {
@@ -44,6 +80,8 @@ func main() {
 		log.Fatalf("Unable to create Google Sheets client: %v", err)
 	}
 
+	makeHeader(client)
+
 	go func() {
 		wg := &sync.WaitGroup{}
 		i := 1
@@ -66,10 +104,42 @@ func main() {
 
 }
 
+func makeHeader(client *sheets.Service) {
+	res, err := client.Spreadsheets.Values.Get(spreadsheetId, fmt.Sprintf("%s!1:1", sheetName)).MajorDimension("ROWS").Do()
+	if err != nil {
+		log.Fatalf("Read spreadsheet failed. err = %v", err)
+	}
+
+	if len(res.Values) == 0 || !reflect.DeepEqual(res.Values[0], headers) {
+		v := make([][]interface{}, 0)
+		h := make([]interface{}, 0)
+		for i := range headers {
+			h = append(h, headers[i])
+		}
+
+		v = append(v, h)
+		body := &sheets.ValueRange{Values: v}
+
+		if len(res.Values) != 0 {
+			_, err := client.Spreadsheets.Values.Clear(spreadsheetId, fmt.Sprintf("%s!1:1", sheetName), &sheets.ClearValuesRequest{}).Do()
+			if err != nil {
+				log.Fatalf("Clear spreadsheet header failed. err = %v", err)
+			}
+		}
+
+		_, err = client.Spreadsheets.Values.Append(spreadsheetId, fmt.Sprintf("%s!1:1", sheetName), body).ValueInputOption("USER_ENTERED").Do()
+		if err != nil {
+			log.Fatalf("Write spreadsheet header failed. err = %v", err)
+		}
+	}
+}
+
 func crawl(url string, client *sheets.Service, ctx *context.Context, wg *sync.WaitGroup, ch chan<- []interface{}) {
 	data := make([]interface{}, 0)
+	defer wg.Done()
 	if len(strings.TrimSpace(url)) == 0 {
 		fmt.Println("Skip: empty url")
+		return
 	}
 
 	detailUrl := url + "/detail"
@@ -86,20 +156,19 @@ func crawl(url string, client *sheets.Service, ctx *context.Context, wg *sync.Wa
 	data = append(data, findCommPlan(mainDoc)...)
 	data = append(data, findSubDetail(infoDoc)...)
 
-	wg.Done()
-
 	ch <- data
+
 }
 
 func getDocument(url string) *goquery.Document {
 	res, err := http.Get(url)
 	if err != nil {
-		log.Fatalf("Http request failed, err = %s", err)
+		log.Fatalf("Http request failed, err = %v", err)
 	}
 	defer res.Body.Close()
 	mainDoc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
-		log.Fatalf("Document parsing failed, err = %s", err)
+		log.Fatalf("Document parsing failed, err = %v", err)
 	}
 
 	return mainDoc
@@ -180,7 +249,7 @@ func findSubDetail(doc *goquery.Document) []interface{} {
 
 func writeToSpreadsheet(client *sheets.Service, d [][]interface{}, ctx *context.Context) {
 	body := &sheets.ValueRange{Values: d}
-	_, err := client.Spreadsheets.Values.Append(spreadsheetId, "Main!A1:A1", body).ValueInputOption("USER_ENTERED").InsertDataOption("INSERT_ROWS").Context(*ctx).Do()
+	_, err := client.Spreadsheets.Values.Append(spreadsheetId, fmt.Sprintf("%s!A1:A1", sheetName), body).ValueInputOption("USER_ENTERED").InsertDataOption("INSERT_ROWS").Context(*ctx).Do()
 	if err != nil {
 		log.Fatalf("Unable to append data to sheet: %v", err)
 	}
