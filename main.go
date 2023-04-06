@@ -20,7 +20,7 @@ var (
 	sheetName     = "Main"
 	spreadsheetId = ""
 	crawlDelay    = 500 * time.Millisecond
-	headers       = []string{
+	headers       = []interface{}{
 		"標題",
 		"連結",
 		"價格/坪",
@@ -111,14 +111,7 @@ func makeHeader(client *sheets.Service) {
 	}
 
 	if len(res.Values) == 0 || !reflect.DeepEqual(res.Values[0], headers) {
-		v := make([][]interface{}, 0)
-		h := make([]interface{}, 0)
-		for i := range headers {
-			h = append(h, headers[i])
-		}
-
-		v = append(v, h)
-		body := &sheets.ValueRange{Values: v}
+		body := &sheets.ValueRange{Values: [][]interface{}{headers}}
 
 		if len(res.Values) != 0 {
 			_, err := client.Spreadsheets.Values.Clear(spreadsheetId, fmt.Sprintf("%s!1:1", sheetName), &sheets.ClearValuesRequest{}).Do()
@@ -175,20 +168,17 @@ func getDocument(url string) *goquery.Document {
 }
 
 func findName(doc *goquery.Document) []interface{} {
-	d := make([]interface{}, 0)
 	title := doc.Find(".build-name").First().Text()
-	return append(d, title)
+	return []interface{}{title}
 }
 
 func findUrl(doc *goquery.Document, url string) []interface{} {
-	d := make([]interface{}, 0)
-	return append(d, url)
+	return []interface{}{url}
 }
 
 func findPricePerPing(doc *goquery.Document) []interface{} {
-	d := make([]interface{}, 0)
 	pricePerPing := doc.Find(".build-price").ChildrenFiltered(".price").First().Text()
-	return append(d, pricePerPing)
+	return []interface{}{pricePerPing}
 }
 
 func findOtherInfo(doc *goquery.Document) []interface{} {
